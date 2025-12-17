@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Mapa Interativo - CRUD Mundo">
+    <title>Mapa Interativo - CRUD Mundo</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/mapa-effects.css">
+    <style>
+        /* Estilos específicos do mapa (mantidos do arquivo original) */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0e27;
+            --bg-secondary: #1a1f3a;
+            --bg-tertiary: #2d3a5c;
+            --color-accent: #00ff88;
+            --color-secondary: #6366f1;
+            --color-warning: #ff6b6b;
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0c0;
+            --text-tertiary: #808090;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        .container-mapa {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        header {
+            background: var(--bg-secondary);
+            padding: 1.5rem 2rem;
+            border-bottom: 2px solid rgba(0, 255, 136, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+            box-shadow: 0 8px 32px rgba(0, 255, 136, 0.1);
+        }
+
+        .logo {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: var(--color-accent);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 0.6rem 1.2rem;
+            background: var(--bg-tertiary);
+            border: 2px solid var(--color-accent);
+            color: var(--color-accent);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            background: var(--color-accent);
+            color: var(--bg-primary);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.6);
+            transform: translateY(-2px);
+        }
+
+        /* Canvas Container */
+        .mapa-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: radial-gradient(ellipse at center, rgba(0, 255, 136, 0.05) 0%, transparent 70%);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Sidebar Info */
+        .sidebar {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 350px;
+            height: 100%;
+            background: rgba(26, 31, 58, 0.95);
+            border-left: 2px solid rgba(0, 255, 136, 0.2);
+            overflow-y: auto;
+            padding: 2rem;
+            backdrop-filter: blur(10px);
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            z-index: 50;
+        }
+
+        .sidebar.active {
+            transform: translateX(0);
+        }
+
+        .sidebar-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            color: var(--color-accent);
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar-close:hover {
+            transform: rotate(90deg);
+        }
+
+        .info-title {
+            font-size: 1.5rem;
+            color: var(--color-accent);
+            margin-bottom: 1rem;
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+        }
+
+        .info-item {
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(0, 255, 136, 0.1);
+        }
+
+        .info-label {
+            font-size: 0.85rem;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 0.5rem;
+        }
+
+        .info-value {
+            font-size: 1.1rem;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            background: rgba(26, 31, 58, 0.95);
+            border: 2px solid var(--color-accent);
+            border-radius: 8px;
+            padding: 1rem;
+            font-size: 0.9rem;
+            pointer-events: none;
+            z-index: 40;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+            backdrop-filter: blur(10px);
+            display: none;
+            max-width: 250px;
+        }
+
+        .tooltip.active {
+            display: block;
+        }
+
+        .tooltip-title {
+            color: var(--color-accent);
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .tooltip-info {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        /* Stats Panel */
+        .stats-panel {
+            position: absolute;
+            bottom: 2rem;
+            left: 2rem;
+            background: rgba(26, 31, 58, 0.95);
+            border: 2px solid rgba(0, 255, 136, 0.2);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            z-index: 40;
+            min-width: 250px;
+        }
+
+        .stats-title {
+            color: var(--color-accent);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 1rem;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.8rem;
+            padding-bottom: 0.8rem;
+            border-bottom: 1px solid rgba(0, 255, 136, 0.1);
+        }
+
+        .stat-row:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .stat-value {
+            color: var(--color-accent);
+            font-weight: bold;
+            font-size: 1.1rem;
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+        }
+
+        /* Legend */
+        .legend {
+            position: absolute;
+            top: 2rem;
+            left: 2rem;
+            background: rgba(26, 31, 58, 0.95);
+            border: 2px solid rgba(0, 255, 136, 0.2);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            z-index: 40;
+        }
+
+        .legend-title {
+            color: var(--color-accent);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 1rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            margin-bottom: 0.8rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .legend-color.pais {
+            background: var(--color-secondary);
+            box-shadow: 0 0 8px var(--color-secondary);
+        }
+
+        .legend-color.cidade {
+            background: var(--color-accent);
+            box-shadow: 0 0 8px var(--color-accent);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            header {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .sidebar {
+                width: 100%;
+            }
+
+            .stats-panel,
+            .legend {
+                display: none;
+            }
+        }
+
+        /* Animações */
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        @keyframes glow {
+            0%, 100% {
+                text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+            }
+            50% {
+                text-shadow: 0 0 20px rgba(0, 255, 136, 0.6);
+            }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        .glow {
+            animation: glow 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-mapa">
+        <!-- Header -->
+        <header>
+            <a href="index.php" class="logo">
+                🌍 CRUD Mundo - Mapa Interativo
+            </a>
+            <div class="controls">
+                <button class="btn" onclick="toggleLegend()">Legenda</button>
+                <a href="index.php" class="btn">Voltar ao CRUD</a>
+            </div>
+        </header>
+
+        <!-- Mapa Container -->
+        <div class="mapa-container">
+            <!-- Canvas para desenhar mapa -->
+            <canvas id="mapaCanvas"></canvas>
+
+            <!-- Tooltip -->
+            <div class="tooltip" id="tooltip">
+                <div class="tooltip-title" id="tooltipTitle"></div>
+                <div class="tooltip-info" id="tooltipInfo"></div>
+            </div>
+
+            <!-- Legend -->
+            <div class="legend" id="legend">
+                <div class="legend-title">Legenda</div>
+                <div class="legend-item">
+                    <div class="legend-color pais"></div>
+                    <span>País</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color cidade"></div>
+                    <span>Cidade</span>
+                </div>
+                <div class="legend-item">
+                    <span>Clique em um país para ver detalhes</span>
+                </div>
+            </div>
+
+            <!-- Stats Panel -->
+            <div class="stats-panel">
+                <div class="stats-title">📊 Estatísticas</div>
+                <div class="stat-row">
+                    <span class="stat-label">Total de Países</span>
+                    <span class="stat-value" id="totalPaises">0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Total de Cidades</span>
+                    <span class="stat-value" id="totalCidades">0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Continentes</span>
+                    <span class="stat-value" id="totalContinentes">0</span>
+                </div>
+            </div>
+
+            <!-- Sidebar Info -->
+            <div class="sidebar" id="sidebar">
+                <button class="sidebar-close" onclick="closeSidebar()">✕</button>
+                <div class="info-title" id="sidebarTitle">Informações</div>
+                <div id="sidebarContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // CORREÇÃO: URL dinâmica para o endpoint do mapa (funciona em subdiretórios)
+        const API_MAPA_URL = (function() {
+            const origin = window.location.origin;
+            const basePath = window.location.pathname.replace(/\/[^\/]*$/, '');
+            return `${origin}${basePath}/api/index.php?mapa`;
+        })();
+        
+        const canvas = document.getElementById('mapaCanvas');
+        const ctx = canvas.getContext('2d');
+        const tooltip = document.getElementById('tooltip');
+        const sidebar = document.getElementById('sidebar');
+
+        // Configuração
+        let paises = [];
+        let cidades = [];
+        let particulas = [];
+        let selectedPais = null;
+
+        // Redimensionar canvas
+        function resizeCanvas() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+        }
+
+        // Carregar dados - CORREÇÃO: Usar a URL corrigida
+        async function carregarDados() {
+            try {
+                // Carregar dados do mapa via API
+                const res = await fetch(API_MAPA_URL);
+                const data = await res.json();
+                
+                if (data.sucesso) {
+                    paises = data.dados.paises || [];
+                    cidades = [];
+                    
+                    // Extrair cidades dos países
+                    paises.forEach(pais => {
+                        if (pais.cidades && pais.cidades.length > 0) {
+                            cidades.push(...pais.cidades.map(cidade => ({
+                                ...cidade,
+                                id_pais: pais.id_pais,
+                                nome_pais: pais.nome
+                            })));
+                        }
+                    });
+
+                    // Carregar estatísticas
+                    document.getElementById('totalPaises').textContent = data.dados.estatisticas.total_paises;
+                    document.getElementById('totalCidades').textContent = data.dados.estatisticas.total_cidades;
+                    document.getElementById('totalContinentes').textContent = data.dados.estatisticas.total_continentes;
+
+                    // Atribuir posições aos países
+                    atribuirPosicoes();
+                    
+                    // Criar partículas
+                    criarParticulas();
+                    
+                    // Iniciar animação
+                    animate();
+                } else {
+                    console.error('Erro na API:', data.mensagem);
+                }
+            } catch (error) {
+                console.error('Erro ao carregar dados:', error);
+                // Fallback: mostrar dados simulados se a API falhar
+                dadosSimulados();
+            }
+        }
+
+        // Dados simulados para fallback
+        function dadosSimulados() {
+            paises = [
+                {
+                    id_pais: 1,
+                    nome: 'Brasil',
+                    continente: 'América',
+                    populacao: 213993437,
+                    idioma: 'Português',
+                    codigo_iso: 'BRA',
+                    capital: 'Brasília',
+                    total_cidades: 3,
+                    cidades: [
+                        { id_cidade: 1, nome: 'São Paulo', populacao: 12325232 },
+                        { id_cidade: 2, nome: 'Rio de Janeiro', populacao: 6747815 },
+                        { id_cidade: 3, nome: 'Brasília', populacao: 3055149 }
+                    ]
+                },
+                {
+                    id_pais: 2,
+                    nome: 'Estados Unidos',
+                    continente: 'América',
+                    populacao: 331002651,
+                    idioma: 'Inglês',
+                    codigo_iso: 'USA',
+                    capital: 'Washington D.C.',
+                    total_cidades: 2,
+                    cidades: [
+                        { id_cidade: 4, nome: 'Nova York', populacao: 8398748 },
+                        { id_cidade: 5, nome: 'Los Angeles', populacao: 3980400 }
+                    ]
+                }
+            ];
+            
+            cidades = [];
+            paises.forEach(pais => {
+                if (pais.cidades && pais.cidades.length > 0) {
+                    cidades.push(...pais.cidades.map(cidade => ({
+                        ...cidade,
+                        id_pais: pais.id_pais,
+                        nome_pais: pais.nome
+                    })));
+                }
+            });
+            
+            document.getElementById('totalPaises').textContent = paises.length;
+            document.getElementById('totalCidades').textContent = cidades.length;
+            document.getElementById('totalContinentes').textContent = 1;
+            
+            atribuirPosicoes();
+            criarParticulas();
+            animate();
+        }
+
+        // Atribuir posições aos países (distribuição no canvas)
+        function atribuirPosicoes() {
+            const width = canvas.width;
+            const height = canvas.height;
+
+            paises.forEach((pais, index) => {
+                // Se já tiver posição (vindo da API), usar ela
+                if (!pais.x || !pais.y) {
+                    // Distribuição em grid
+                    const cols = Math.ceil(Math.sqrt(paises.length));
+                    const col = index % cols;
+                    const row = Math.floor(index / cols);
+
+                    const padding = 100;
+                    const cellWidth = (width - padding * 2) / cols;
+                    const cellHeight = (height - padding * 2) / Math.ceil(paises.length / cols);
+
+                    pais.x = padding + cellWidth * col + cellWidth / 2 + (Math.random() - 0.5) * 50;
+                    pais.y = padding + cellHeight * row + cellHeight / 2 + (Math.random() - 0.5) * 50;
+                }
+                
+                pais.vx = (Math.random() - 0.5) * 0.5;
+                pais.vy = (Math.random() - 0.5) * 0.5;
+                pais.radius = 30;
+                pais.hover = false;
+            });
+
+            // Atribuir posições às cidades próximas aos países
+            cidades.forEach(cidade => {
+                const pais = paises.find(p => p.id_pais == cidade.id_pais);
+                if (pais) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const distance = 60 + Math.random() * 40;
+                    cidade.x = pais.x + Math.cos(angle) * distance;
+                    cidade.y = pais.y + Math.sin(angle) * distance;
+                    cidade.vx = (Math.random() - 0.5) * 0.3;
+                    cidade.vy = (Math.random() - 0.5) * 0.3;
+                    cidade.radius = 15;
+                    cidade.hover = false;
+                }
+            });
+        }
+
+        // Criar partículas de fundo
+        function criarParticulas() {
+            particulas = [];
+            for (let i = 0; i < 50; i++) {
+                particulas.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    vx: (Math.random() - 0.5) * 0.2,
+                    vy: (Math.random() - 0.5) * 0.2,
+                    radius: Math.random() * 1.5,
+                    opacity: Math.random() * 0.5 + 0.2
+                });
+            }
+        }
+
+        // Desenhar partículas
+        function desenharParticulas() {
+            particulas.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+
+                // Wrap around
+                if (p.x < 0) p.x = canvas.width;
+                if (p.x > canvas.width) p.x = 0;
+                if (p.y < 0) p.y = canvas.height;
+                if (p.y > canvas.height) p.y = 0;
+
+                ctx.fillStyle = `rgba(0, 255, 136, ${p.opacity})`;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        // Desenhar linhas de conexão
+        function desenharConexoes() {
+            ctx.strokeStyle = 'rgba(0, 255, 136, 0.1)';
+            ctx.lineWidth = 1;
+
+            // Linhas entre países próximos
+            for (let i = 0; i < paises.length; i++) {
+                for (let j = i + 1; j < paises.length; j++) {
+                    const dx = paises[j].x - paises[i].x;
+                    const dy = paises[j].y - paises[i].y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < 300) {
+                        ctx.globalAlpha = 1 - (dist / 300);
+                        ctx.beginPath();
+                        ctx.moveTo(paises[i].x, paises[i].y);
+                        ctx.lineTo(paises[j].x, paises[j].y);
+                        ctx.stroke();
+                        ctx.globalAlpha = 1;
+                    }
+                }
+            }
+
+            // Linhas entre países e cidades
+            ctx.strokeStyle = 'rgba(99, 102, 241, 0.15)';
+            cidades.forEach(cidade => {
+                const pais = paises.find(p => p.id_pais == cidade.id_pais);
+                if (pais) {
+                    ctx.beginPath();
+                    ctx.moveTo(pais.x, pais.y);
+                    ctx.lineTo(cidade.x, cidade.y);
+                    ctx.stroke();
+                }
+            });
+        }
+
+        // Desenhar países
+        function desenharPaises() {
+            paises.forEach(pais => {
+                const isHover = pais.hover;
+                const radius = isHover ? pais.radius * 1.3 : pais.radius;
+
+                // Glow
+                ctx.fillStyle = isHover ? 
+                    'rgba(0, 255, 136, 0.3)' : 
+                    'rgba(0, 255, 136, 0.1)';
+                ctx.beginPath();
+                ctx.arc(pais.x, pais.y, radius * 1.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Círculo principal
+                ctx.fillStyle = isHover ? '#00ff88' : '#6366f1';
+                ctx.beginPath();
+                ctx.arc(pais.x, pais.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Borda
+                ctx.strokeStyle = '#00ff88';
+                ctx.lineWidth = isHover ? 3 : 2;
+                ctx.stroke();
+
+                // Texto
+                ctx.fillStyle = '#000000';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(pais.nome.substring(0, 3).toUpperCase(), pais.x, pais.y);
+            });
+        }
+
+        // Desenhar cidades
+        function desenharCidades() {
+            cidades.forEach(cidade => {
+                const isHover = cidade.hover;
+                const radius = isHover ? cidade.radius * 1.3 : cidade.radius;
+
+                // Glow
+                ctx.fillStyle = isHover ? 
+                    'rgba(0, 255, 136, 0.4)' : 
+                    'rgba(0, 255, 136, 0.15)';
+                ctx.beginPath();
+                ctx.arc(cidade.x, cidade.y, radius * 1.8, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Círculo principal
+                ctx.fillStyle = '#00ff88';
+                ctx.beginPath();
+                ctx.arc(cidade.x, cidade.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Borda
+                ctx.strokeStyle = '#00ff88';
+                ctx.lineWidth = isHover ? 2 : 1;
+                ctx.stroke();
+            });
+        }
+
+        // Atualizar posições (movimento suave)
+        function atualizarPosicoes() {
+            paises.forEach(pais => {
+                pais.x += pais.vx;
+                pais.y += pais.vy;
+
+                // Bounce nas bordas
+                if (pais.x - pais.radius < 0 || pais.x + pais.radius > canvas.width) {
+                    pais.vx *= -1;
+                }
+                if (pais.y - pais.radius < 0 || pais.y + pais.radius > canvas.height) {
+                    pais.vy *= -1;
+                }
+            });
+
+            cidades.forEach(cidade => {
+                const pais = paises.find(p => p.id_pais == cidade.id_pais);
+                if (pais) {
+                    // Manter próximo ao país
+                    const dx = pais.x - cidade.x;
+                    const dy = pais.y - cidade.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const targetDist = 80;
+
+                    if (dist > targetDist) {
+                        const angle = Math.atan2(dy, dx);
+                        cidade.x += Math.cos(angle) * 0.5;
+                        cidade.y += Math.sin(angle) * 0.5;
+                    }
+                }
+            });
+        }
+
+        // Detectar hover
+        function detectarHover(mouseX, mouseY) {
+            paises.forEach(pais => {
+                const dx = mouseX - pais.x;
+                const dy = mouseY - pais.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                pais.hover = dist < pais.radius * 1.5;
+            });
+
+            cidades.forEach(cidade => {
+                const dx = mouseX - cidade.x;
+                const dy = mouseY - cidade.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                cidade.hover = dist < cidade.radius * 1.8;
+            });
+        }
+
+        // Mostrar tooltip
+        function mostrarTooltip(x, y, titulo, info) {
+            const tooltipTitle = document.getElementById('tooltipTitle');
+            const tooltipInfo = document.getElementById('tooltipInfo');
+            
+            tooltipTitle.textContent = titulo;
+            tooltipInfo.textContent = info;
+            
+            tooltip.classList.add('active');
+            tooltip.style.left = (x + 10) + 'px';
+            tooltip.style.top = (y + 10) + 'px';
+        }
+
+        // Esconder tooltip
+        function esconderTooltip() {
+            tooltip.classList.remove('active');
+        }
+
+        // Eventos do mouse
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            detectarHover(mouseX, mouseY);
+
+            // Mostrar tooltip
+            const paisHover = paises.find(p => p.hover);
+            const cidadeHover = cidades.find(c => c.hover);
+
+            if (paisHover) {
+                mostrarTooltip(mouseX, mouseY, paisHover.nome, `${paisHover.continente} • ${parseInt(paisHover.populacao).toLocaleString()} hab.`);
+                canvas.style.cursor = 'pointer';
+            } else if (cidadeHover) {
+                mostrarTooltip(mouseX, mouseY, cidadeHover.nome, `${parseInt(cidadeHover.populacao).toLocaleString()} hab.`);
+                canvas.style.cursor = 'pointer';
+            } else {
+                esconderTooltip();
+                canvas.style.cursor = 'default';
+            }
+        });
+
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const paisClicado = paises.find(p => {
+                const dx = mouseX - p.x;
+                const dy = mouseY - p.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                return dist < p.radius * 1.5;
+            });
+
+            if (paisClicado) {
+                mostrarSidebar(paisClicado);
+            }
+        });
+
+        // Mostrar sidebar
+        function mostrarSidebar(pais) {
+            selectedPais = pais;
+            const cidadesDoPais = cidades.filter(c => c.id_pais == pais.id_pais);
+            
+            let html = `
+                <div class="info-item">
+                    <div class="info-label">País</div>
+                    <div class="info-value">${pais.nome}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Continente</div>
+                    <div class="info-value">${pais.continente}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">População</div>
+                    <div class="info-value">${parseInt(pais.populacao).toLocaleString()}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Idioma</div>
+                    <div class="info-value">${pais.idioma}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Cidades (${cidadesDoPais.length})</div>
+                    <div class="info-value">
+                        ${cidadesDoPais.length > 0 ? 
+                            cidadesDoPais.map(c => `
+                                <div style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(0,255,136,0.05); border-radius: 5px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <span>${c.nome}</span>
+                                        <div>
+                                            <span style="color: var(--text-tertiary); font-size: 0.9rem; margin-right: 10px;">
+                                                ${parseInt(c.populacao).toLocaleString()} hab.
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('') :
+                            '<div style="color: var(--text-tertiary);">Nenhuma cidade cadastrada</div>'
+                        }
+                    </div>
+                </div>
+            `;
+            
+            // Adicionar seção de integração com API se tiver código ISO
+            if (pais.codigo_iso) {
+                html += `
+                    <div class="info-item">
+                        <div class="info-label">API Integrations</div>
+                        <div class="info-value">
+                            <button onclick="carregarInfoAPI('${pais.codigo_iso}')" class="btn" style="width: 100%; margin-bottom: 10px; padding: 10px;">
+                                <i class="fas fa-external-link-alt"></i> Mais Informações (REST Countries)
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            document.getElementById('sidebarContent').innerHTML = html;
+            document.getElementById('sidebarTitle').textContent = '🌍 ' + pais.nome;
+            sidebar.classList.add('active');
+        }
+
+        // Função para carregar informações da API REST Countries
+        async function carregarInfoAPI(codigo) {
+            try {
+                const response = await fetch(`api/index.php/paises/informacoes-api?codigo=${codigo}`);
+                const result = await response.json();
+                
+                if (result.sucesso) {
+                    const info = result.dados;
+                    
+                    let infoHTML = `
+                        <div class="info-item">
+                            <div class="info-label">Nome Oficial</div>
+                            <div class="info-value">${info.nome_oficial}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Capital</div>
+                            <div class="info-value">${info.capital}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Região</div>
+                            <div class="info-value">${info.regiao} / ${info.subregiao}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">População</div>
+                            <div class="info-value">${parseInt(info.populacao).toLocaleString()}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Área</div>
+                            <div class="info-value">${parseInt(info.area).toLocaleString()} km²</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Idiomas</div>
+                            <div class="info-value">${info.idiomas.join(', ')}</div>
+                        </div>
+                    `;
+                    
+                    if (info.moedas && Object.keys(info.moedas).length > 0) {
+                        const moedas = Object.entries(info.moedas).map(([codigo, dados]) => 
+                            `${codigo}: ${dados.nome}`
+                        ).join(', ');
+                        infoHTML += `
+                            <div class="info-item">
+                                <div class="info-label">Moedas</div>
+                                <div class="info-value">${moedas}</div>
+                            </div>
+                        `;
+                    }
+                    
+                    if (info.bandeira) {
+                        infoHTML += `
+                            <div class="info-item">
+                                <div class="info-label">Bandeira</div>
+                                <div class="info-value">
+                                    <img src="${info.bandeira}" alt="Bandeira" style="width: 100px; margin-top: 0.5rem; border-radius: 5px;">
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
+                    infoHTML += `
+                        <div class="info-item">
+                            <button onclick="mostrarSidebar(selectedPais)" class="btn" style="width: 100%; margin-top: 1rem;">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </button>
+                        </div>
+                    `;
+                    
+                    document.getElementById('sidebarContent').innerHTML = infoHTML;
+                    document.getElementById('sidebarTitle').textContent = '🌍 Informações da API';
+                    
+                } else {
+                    alert('Erro: ' + result.mensagem);
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                alert('Erro ao carregar informações da API');
+            }
+        }
+
+        // Função para ver clima da cidade no mapa
+        async function verClimaCidade(cidadeId) {
+            try {
+                const response = await fetch(`api/index.php/cidades/clima/${cidadeId}`);
+                const result = await response.json();
+                
+                if (result.sucesso) {
+                    const clima = result.dados;
+                    
+                    // Criar popup no mapa
+                    const tooltip = document.getElementById('tooltip');
+                    tooltip.innerHTML = `
+                        <div class="tooltip-title">🌤️ ${clima.cidade}</div>
+                        <div class="tooltip-info">
+                            <div>Temperatura: ${clima.temperatura}°C</div>
+                            <div>Condição: ${clima.condicao}</div>
+                            <div>Umidade: ${clima.umidade}%</div>
+                            <div>Vento: ${clima.vento.velocidade} m/s ${clima.vento.direcao}</div>
+                            <div style="font-size: 0.8rem; color: var(--text-tertiary); margin-top: 5px;">
+                                Fonte: ${clima.fonte} | ${clima.atualizado}
+                            </div>
+                        </div>
+                    `;
+                    tooltip.classList.add('active');
+                    
+                    // Posicionar tooltip perto da cidade
+                    const cidade = cidades.find(c => c.id_cidade == cidadeId);
+                    if (cidade) {
+                        tooltip.style.left = (cidade.x + 20) + 'px';
+                        tooltip.style.top = (cidade.y - 100) + 'px';
+                    }
+                    
+                    // Auto-fechar após 5 segundos
+                    setTimeout(() => {
+                        tooltip.classList.remove('active');
+                    }, 5000);
+                    
+                } else {
+                    alert('Erro: ' + result.mensagem);
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                alert('Erro ao obter clima');
+            }
+        }
+
+        // Fechar sidebar
+        function closeSidebar() {
+            sidebar.classList.remove('active');
+        }
+
+        // Toggle legenda
+        function toggleLegend() {
+            const legend = document.getElementById('legend');
+            legend.style.display = legend.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // Loop de animação
+        function animate() {
+            // Limpar canvas
+            ctx.fillStyle = 'rgba(10, 14, 39, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Desenhar elementos
+            desenharParticulas();
+            desenharConexoes();
+            desenharPaises();
+            desenharCidades();
+
+            // Atualizar posições
+            atualizarPosicoes();
+
+            requestAnimationFrame(animate);
+        }
+
+        // Inicializar
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        carregarDados();
+    </script>
+</body>
+</html>
